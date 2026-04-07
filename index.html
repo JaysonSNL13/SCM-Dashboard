@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>S&L Inventory Dashboard</title>
+<style>
+/* ========= BASE ========= */
+:root {
+  --bg: #f5f6fa; --white: #fff; --border: #dde1ea;
+  --navy: #1a2744; --navy2: #243360; --accent: #3558b0;
+  --red: #d9534f; --green: #2e7d32; --amber: #f59e0b;
+  --text: #1e2533; --muted: #6b7280; --flag-bg: #fff3cd;
+  --flag-border: #ffc107; --header-bg: #1a2744;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Segoe UI', Arial, sans-serif; background: var(--bg); color: var(--text); font-size: 13px; }
+/* ========= LAYOUT ========= */
+#app { display: flex; flex-direction: column; min-height: 100vh; }
+header { background: var(--navy); color: #fff; padding: 12px 20px; display: flex; align-items: center; justify-content: space-between; }
+header h1 { font-size: 18px; font-weight: 700; letter-spacing: .5px; }
+#header-date { font-size: 11px; opacity: .75; }
+#push-btn { background: #fff; color: var(--navy); border: none; border-radius: 4px; padding: 5px 14px; cursor: pointer; font-size: 12px; font-weight: 600; }
+#push-btn:hover { background: #e8edf7; }
+nav { background: var(--navy2); display: flex; }
+nav button { background: none; border: none; color: rgba(255,255,255,.7); padding: 11px 22px; cursor: pointer; font-size: 13px; font-weight: 500; border-bottom: 3px solid transparent; transition: all .2s; }
+nav button:hover { color: #fff; }
+nav button.active { color: #fff; border-bottom-color: #60a5fa; background: rgba(255,255,255,.07); }
+.tab-panel { display: none; padding: 16px; }
+.tab-panel.active { display: block; }
+/* ========= CONTROLS ========= */
+.controls { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 14px; align-items: center; }
+.controls label { font-size: 12px; font-weight: 600; color: var(--muted); }
+select, .pill-group button {
+  border: 1px solid var(--border); border-radius: 4px; background: var(--white);
+  color: var(--text); padding: 5px 10px; font-size: 12px; cursor: pointer;
+}
+select:focus { outline: 2px solid var(--accent); }
+.pill-group { display: flex; gap: 4px; }
+.pill-group button { border-radius: 20px; }
+.pill-group button.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+/* ========= CARD ========= */
+.card { background: var(--white); border-radius: 6px; border: 1px solid var(--border); margin-bottom: 16px; overflow: hidden; }
+.card-header { background: var(--navy); color: #fff; padding: 8px 14px; font-weight: 700; font-size: 13px; display: flex; justify-content: space-between; align-items: center; }
+.card-header span { font-size: 11px; font-weight: 400; opacity: .8; }
+/* ========= TABLE ========= */
+.tbl-wrap { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; min-width: 600px; }
+th { background: var(--header-bg); color: #fff; padding: 6px 8px; text-align: center; font-size: 11px; font-weight: 600; white-space: nowrap; border-right: 1px solid rgba(255,255,255,.1); position: sticky; top: 0; z-index: 1; }
+th.left { text-align: left; }
+td { padding: 5px 8px; border-bottom: 1px solid var(--border); border-right: 1px solid #f0f1f5; text-align: center; white-space: nowrap; }
+td.left { text-align: left; }
+tr:hover td { background: #f0f4ff; }
+tr.group-header td { background: #e8edf7; font-weight: 700; font-size: 12px; color: var(--navy); }
+tr.flagged td { background: var(--flag-bg); }
+tr.flagged td.left { border-left: 3px solid var(--flag-border); }
+.badge { display: inline-block; border-radius: 3px; padding: 1px 6px; font-size: 10px; font-weight: 700; }
+.badge-red   { background: #fde8e8; color: var(--red); }
+.badge-green { background: #e8f5e9; color: var(--green); }
+.badge-blue  { background: #e3eeff; color: var(--accent); }
+.badge-amber { background: #fef3c7; color: #92400e; }
+.num { font-variant-numeric: tabular-nums; }
+.text-muted { color: var(--muted); font-size: 11px; }
+/* ========= SPINNER ========= */
+.spinner-wrap { display: flex; align-items: center; justify-content: center; padding: 50px; gap: 12px; color: var(--muted); }
+.spinner { width: 22px; height: 22px; border: 3px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+/* ========= TOAST ========= */
+#toast { position: fixed; bottom: 20px; right: 20px; background: #1e2533; color: #fff; padding: 10px 18px; border-radius: 6px; font-size: 13px; z-index: 9999; transform: translateY(60px); opacity: 0; transition: all .3s; max-width: 400px; }
+#toast.show { transform: translateY(0); opacity: 1; }
+/* ========= WHSE OVERVIEW SPECIFIC ========= */
+.wh-size-col { min-width: 42px; }
+.wh-metric-col { min-width: 70px; }
+/* ========= MULTISELECT ========= */
+.ms-wrap { position: relative; }
+.ms-btn { border: 1px solid var(--border); border-radius: 4px; background: var(--white); padding: 5px 10px; cursor: pointer; font-size: 12px; min-width: 200px; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.ms-btn:after { content:'▾'; color: var(--muted); }
+.ms-dropdown { display: none; position: absolute; top: calc(100% + 2px); left: 0; background: #fff; border: 1px solid var(--border); border-radius: 4px; z-index: 100; min-width: 260px; max-height: 280px; overflow-y: auto; box-shadow: 0 4px 12px rgba(0,0,0,.1); }
+.ms-dropdown.open { display: block; }
+.ms-dropdown label { display: flex; align-items: center; gap: 8px; padding: 7px 12px; cursor: pointer; font-size: 12px; }
+.ms-dropdown label:hover { background: #f0f4ff; }
+.ms-dropdown .ms-all { border-bottom: 1px solid var(--border); font-weight: 600; }
+/* ========= RESPONSIVE ========= */
+@media (max-width: 768px) { nav button { padding: 9px 13px; font-size: 11px; } }
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <div>
+      <h1>📦 State &amp; Liberty — Inventory Dashboard</h1>
+      <div id="header-date">Loading…</div>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px">
+      <a href="https://script.google.com/macros/s/AKfycbzrGpQ3ZFKrkyJJwR17JJrMMC8NT4JPhxV_3AaIdEg4siAMU0iosgGmAjSmT7h95KpDGA/exec"
+         target="_blank"
+         style="color:rgba(255,255,255,.7);font-size:11px;text-decoration:none;border:1px solid rgba(255,255,255,.25);border-radius:4px;padding:4px 10px;">
+        🔗 Web App URL
+      </a>
+      <button id="push-btn" onclick="pushToGitHub()">⬆ Push to GitHub</button>
+    </div>
+  </header>
+  <nav>
+    <button class="active" onclick="switchTab('whse')">🏭 WH Stock Overview</button>
+    <button onclick="switchTab('zero')">⚠ Weekly Zero Threshold</button>
+    <button onclick="switchTab('sku')">🔍 SKU Search</button>
+    <button onclick="switchTab('group')">📦 Search by Group</button>
+  </nav>
+
+  <!-- ========== TAB 1: WHSE STOCK OVERVIEW ========== -->
+  <div id="tab-whse" class="tab-panel active">
+    <div class="controls">
+      <label>Sales Period:</label>
+      <div class="pill-group" id="whse-period">
+        <button class="active" data-p="L30">L30</button>
+        <button data-p="L45">L45</button>
+        <button data-p="L60">L60</button>
+        <button data-p="L90">L90</button>
+      </div>
+    </div>
+    <div id="whse-content"><div class="spinner-wrap"><div class="spinner"></div> Loading overview…</div></div>
+  </div>
+
+  <!-- ========== TAB 2: WEEKLY ZERO THRESHOLD ========== -->
+  <div id="tab-zero" class="tab-panel">
+    <div class="controls">
+      <span class="text-muted">Shows Parent Names with at least one SKU where WH Inv &lt; 5, no PO on Order, and Threshold &gt; 0. <strong>Highlighted rows</strong> are the flagged SKUs.</span>
+    </div>
+    <div id="zero-content"><div class="spinner-wrap"><div class="spinner"></div> Loading…</div></div>
+  </div>
+
+  <!-- ========== TAB 3: SKU SEARCH ========== -->
+  <div id="tab-sku" class="tab-panel">
+    <div class="controls">
+      <div>
+        <label>Product Type:</label><br>
+        <select id="sku-type" onchange="onSkuTypeChange()"><option value="">— All —</option></select>
+      </div>
+      <div>
+        <label>Parent Name:</label><br>
+        <select id="sku-parent" onchange="loadSkuSearch()"><option value="">— Select parent —</option></select>
+      </div>
+      <div>
+        <label>Sales Period:</label><br>
+        <div class="pill-group" id="sku-period">
+          <button class="active" data-p="L30">L30</button>
+          <button data-p="L45">L45</button>
+          <button data-p="L60">L60</button>
+          <button data-p="L90">L90</button>
+        </div>
+      </div>
+    </div>
+    <div id="sku-content"><div class="spinner-wrap"><div class="spinner"></div></div></div>
+  </div>
+
+  <!-- ========== TAB 4: SEARCH BY GROUP ========== -->
+  <div id="tab-group" class="tab-panel">
+    <div class="controls">
+      <div>
+        <label>Product Type:</label><br>
+        <select id="grp-type" onchange="onGrpTypeChange()"><option value="">— All —</option></select>
+      </div>
+      <div>
+        <label>Parent Name(s):</label><br>
+        <div class="ms-wrap" id="grp-parent-wrap">
+          <button class="ms-btn" id="grp-parent-btn" onclick="toggleMs()">Select parents</button>
+          <div class="ms-dropdown" id="grp-parent-dd"></div>
+        </div>
+      </div>
+      <div>
+        <label>Sales Period:</label><br>
+        <div class="pill-group" id="grp-period">
+          <button class="active" data-p="L30">L30</button>
+          <button data-p="L45">L45</button>
+          <button data-p="L60">L60</button>
+          <button data-p="L90">L90</button>
+        </div>
+      </div>
+      <div style="margin-top:18px">
+        <button onclick="loadGroupSearch()" style="background:var(--accent);color:#fff;border:none;border-radius:4px;padding:6px 16px;cursor:pointer;font-size:12px;font-weight:600;">Search</button>
+      </div>
+    </div>
+    <div id="grp-content"></div>
+  </div>
+</div>
+<div id="toast"></div>
+
+<script>
+// ==================== STATE ====================
+let currentWhsePeriod = 'L30';
+let currentSkuPeriod  = 'L30';
+let currentGrpPeriod  = 'L30';
+let initData = {};
+
+// ==================== INIT ====================
+document.addEventListener('DOMContentLoaded', () => {
+  google.script.run
+    .withSuccessHandler(d => {
+      initData = d;
+      document.getElementById('header-date').textContent = 'Last Updated: ' + (d.dateUpdated || '—');
+      populateTypeDropdowns(d.productTypes);
+      loadWhseOverview();
+      loadZeroThreshold();
+    })
+    .withFailureHandler(err => toast('Error loading init data: ' + err.message, true))
+    .getInitData();
+
+  // Pill group listeners
+  setupPills('whse-period', v => { currentWhsePeriod = v; loadWhseOverview(); });
+  setupPills('sku-period',  v => { currentSkuPeriod  = v; loadSkuSearch(); });
+  setupPills('grp-period',  v => { currentGrpPeriod  = v; });
+});
+
+function setupPills(id, cb) {
+  document.getElementById(id).querySelectorAll('button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.getElementById(id).querySelectorAll('button').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      cb(btn.dataset.p);
+    });
+  });
+}
+
+// ==================== TABS ====================
+function switchTab(tab) {
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-' + tab).classList.add('active');
+  event.currentTarget.classList.add('active');
+}
+
+// ==================== DROPDOWNS ====================
+function populateTypeDropdowns(types) {
+  ['sku-type','grp-type'].forEach(id => {
+    const sel = document.getElementById(id);
+    sel.innerHTML = '<option value="">— All —</option>';
+    types.forEach(t => { const o = document.createElement('option'); o.value = t; o.textContent = t; sel.appendChild(o); });
+  });
+}
+
+function loadParentsForDropdown(selId, type, cb) {
+  google.script.run
+    .withSuccessHandler(names => {
+      const sel = document.getElementById(selId);
+      sel.innerHTML = '<option value="">— Select —</option>';
+      names.forEach(n => { const o = document.createElement('option'); o.value = n; o.textContent = n; sel.appendChild(o); });
+      if (cb) cb(names);
+    })
+    .withFailureHandler(err => toast('Error: ' + err.message, true))
+    .getParentsByType(type);
+}
+
+function onSkuTypeChange() {
+  loadParentsForDropdown('sku-parent', document.getElementById('sku-type').value, () => {});
+  document.getElementById('sku-content').innerHTML = '';
+}
+
+function onGrpTypeChange() {
+  const type = document.getElementById('grp-type').value;
+  google.script.run
+    .withSuccessHandler(names => buildMultiSelect(names))
+    .withFailureHandler(err => toast('Error: ' + err.message, true))
+    .getParentsByType(type);
+  document.getElementById('grp-content').innerHTML = '';
+}
+
+// ==================== MULTI-SELECT ====================
+let msOpen = false;
+function toggleMs() {
+  msOpen = !msOpen;
+  document.getElementById('grp-parent-dd').classList.toggle('open', msOpen);
+}
+document.addEventListener('click', e => {
+  if (!document.getElementById('grp-parent-wrap').contains(e.target)) {
+    msOpen = false;
+    document.getElementById('grp-parent-dd').classList.remove('open');
+  }
+});
+function buildMultiSelect(names) {
+  const dd = document.getElementById('grp-parent-dd');
+  dd.innerHTML = `<label class="ms-all"><input type="checkbox" id="ms-all" onchange="msToggleAll(this)"> Select All</label>`;
+  names.forEach(n => {
+    const lbl = document.createElement('label');
+    lbl.innerHTML = `<input type="checkbox" value="${esc(n)}" class="ms-cb" onchange="updateMsLabel()"> ${esc(n)}`;
+    dd.appendChild(lbl);
+  });
+  updateMsLabel();
+}
+function msToggleAll(el) {
+  document.querySelectorAll('.ms-cb').forEach(cb => cb.checked = el.checked);
+  updateMsLabel();
+}
+function updateMsLabel() {
+  const checked = [...document.querySelectorAll('.ms-cb:checked')].map(c => c.value);
+  const all = document.querySelectorAll('.ms-cb').length;
+  document.getElementById('grp-parent-btn').childNodes[0].textContent =
+    checked.length === 0 ? 'Select parents ' :
+    checked.length === all ? 'All (' + all + ') ' :
+    checked.length + ' selected ';
+  if (document.getElementById('ms-all')) document.getElementById('ms-all').checked = checked.length === all;
+}
+function getSelectedParents() {
+  return [...document.querySelectorAll('.ms-cb:checked')].map(c => c.value);
+}
+
+// ==================== WH STOCK OVERVIEW ====================
+function loadWhseOverview() {
+  document.getElementById('whse-content').innerHTML = '<div class="spinner-wrap"><div class="spinner"></div> Loading…</div>';
+  google.script.run
+    .withSuccessHandler(renderWhseOverview)
+    .withFailureHandler(err => { document.getElementById('whse-content').innerHTML = '<div class="spinner-wrap" style="color:red">Error: ' + err.message + '</div>'; })
+    .getWhseStockOverview(currentWhsePeriod);
+}
+
+function renderWhseOverview(data) {
+  const { groups, salesPeriod } = data;
+  if (!groups || !groups.length) { document.getElementById('whse-content').innerHTML = '<div class="spinner-wrap">No data found.</div>'; return; }
+
+  let html = '';
+  groups.forEach(group => {
+    if (!group.items.length) return;
+    // Collect all sizes across this group
+    const allSizes = [...new Set(group.items.flatMap(i => Object.keys(i.sizes)))];
+    allSizes.sort((a, b) => {
+      const na = parseFloat(a), nb = parseFloat(b);
+      if (!isNaN(na) && !isNaN(nb)) return na - nb;
+      return String(a).localeCompare(String(b));
+    });
+
+    html += `<div class="card">
+      <div class="card-header">${esc(group.groupName)} <span>${group.items.length} item(s)</span></div>
+      <div class="tbl-wrap"><table>
+        <thead><tr>
+          <th class="left" style="min-width:240px">Product</th>
+          ${allSizes.map(s => `<th class="wh-size-col">${esc(s)}</th>`).join('')}
+          <th class="wh-metric-col">Grand Total</th>
+          <th class="wh-metric-col">WH DI</th>
+          <th style="min-width:90px">WH Stock Out</th>
+          <th style="min-width:90px">Earliest PO ETA</th>
+          <th>Earliest PO</th>
+          <th class="wh-metric-col">Total OH</th>
+          <th class="wh-metric-col">${salesPeriod}</th>
+          <th class="wh-metric-col">Threshold</th>
+          <th class="wh-metric-col">Intransit</th>
+          <th class="wh-metric-col">PO On Order</th>
+          <th style="min-width:250px">Upcoming POs</th>
+        </tr></thead>
+        <tbody>`;
+
+    group.items.forEach(item => {
+      const whDI = item.whDI != null ? item.whDI.toFixed(1) : '—';
+      const diClass = item.whDI != null ? (item.whDI < 14 ? 'badge-red' : item.whDI < 30 ? 'badge-amber' : 'badge-green') : '';
+      html += `<tr>
+        <td class="left">${esc(item.parentName)}</td>
+        ${allSizes.map(s => `<td class="num">${fmtNum(item.sizes[s])}</td>`).join('')}
+        <td class="num">${fmtNum(item.totalWhseInv)}</td>
+        <td class="num"><span class="badge ${diClass}">${whDI}</span></td>
+        <td>${esc(item.whStockOutDate) || '—'}</td>
+        <td>${esc(item.earliestPoEta) || esc(item.earliestEta) || '—'}</td>
+        <td>${esc(item.earliestPo) || '—'}</td>
+        <td class="num">${fmtNum(item.totalOH)}</td>
+        <td class="num">${fmtNum(item.sales)}</td>
+        <td class="num">${fmtNum(item.threshold)}</td>
+        <td class="num">${fmtNum(item.totalInTransit)}</td>
+        <td class="num">${fmtNum(item.poOnOrder)}</td>
+        <td class="text-muted" style="white-space:normal;max-width:300px;font-size:10px">${esc(item.upcomingPOs) || '—'}</td>
+      </tr>`;
+    });
+    html += '</tbody></table></div></div>';
+  });
+
+  document.getElementById('whse-content').innerHTML = html;
+}
+
+// ==================== ZERO THRESHOLD ====================
+function loadZeroThreshold() {
+  google.script.run
+    .withSuccessHandler(renderZeroThreshold)
+    .withFailureHandler(err => { document.getElementById('zero-content').innerHTML = '<div style="color:red;padding:20px">Error: ' + err.message + '</div>'; })
+    .getWeeklyZeroThreshold();
+}
+
+function renderZeroThreshold(data) {
+  if (!data || !data.length) { document.getElementById('zero-content').innerHTML = '<div class="spinner-wrap">✅ No SKUs flagged — all good!</div>'; return; }
+
+  let html = '';
+  data.forEach(group => {
+    html += `<div class="card">
+      <div class="card-header">${esc(group.productType)} &nbsp;›&nbsp; ${esc(group.parentName)}</div>
+      <div class="tbl-wrap"><table>
+        <thead><tr>
+          <th class="left" style="min-width:50px">Flag</th>
+          <th class="left" style="min-width:180px">SKU</th>
+          <th class="left" style="min-width:260px">Product Name</th>
+          <th>Size</th>
+          <th>Threshold</th>
+          <th>WH Inv</th>
+          <th>PO On Order</th>
+          <th>Store Inv</th>
+          <th>Total OH</th>
+        </tr></thead>
+        <tbody>`;
+    group.skus.forEach(item => {
+      const cls = item.isFlagged ? 'flagged' : '';
+      const flag = item.isFlagged ? '<span class="badge badge-red">⚠ LOW</span>' : '';
+      html += `<tr class="${cls}">
+        <td>${flag}</td>
+        <td class="left text-muted">${esc(item.sku)}</td>
+        <td class="left">${esc(item.productName)}</td>
+        <td>${esc(item.size)}</td>
+        <td class="num">${fmtNum(item.threshold)}</td>
+        <td class="num" style="${item.isFlagged ? 'color:var(--red);font-weight:700' : ''}">${fmtNum(item.whseInv)}</td>
+        <td class="num">${fmtNum(item.poOnOrder)}</td>
+        <td class="num">${fmtNum(item.storeInv)}</td>
+        <td class="num">${fmtNum(item.totalOH)}</td>
+      </tr>`;
+    });
+    html += '</tbody></table></div></div>';
+  });
+
+  document.getElementById('zero-content').innerHTML = html;
+}
+
+// ==================== SKU SEARCH ====================
+function loadSkuSearch() {
+  const type   = document.getElementById('sku-type').value;
+  const parent = document.getElementById('sku-parent').value;
+  if (!parent) { document.getElementById('sku-content').innerHTML = ''; return; }
+  document.getElementById('sku-content').innerHTML = '<div class="spinner-wrap"><div class="spinner"></div> Loading…</div>';
+  google.script.run
+    .withSuccessHandler(renderSkuSearch)
+    .withFailureHandler(err => { document.getElementById('sku-content').innerHTML = '<div style="color:red;padding:20px">Error: ' + err.message + '</div>'; })
+    .getSkuSearchData(type, parent, currentSkuPeriod);
+}
+
+function renderSkuSearch(data) {
+  const { stores, parentGroups, salesPeriod } = data;
+  if (!parentGroups || !parentGroups.length) { document.getElementById('sku-content').innerHTML = '<div class="spinner-wrap">No data.</div>'; return; }
+  const cols = ['On Hand', 'Intransit', 'Threshold', 'Opt. Stock', salesPeriod + ' Sales'];
+
+  let html = '';
+  parentGroups.forEach(pg => {
+    html += `<div class="card">
+      <div class="card-header">${esc(pg.parentName)} <span>${esc(pg.productType)}</span></div>
+      <div class="tbl-wrap"><table>
+        <thead>
+          <tr>
+            <th class="left" rowspan="2" style="min-width:160px">Store</th>
+            <th class="left" rowspan="2" style="min-width:100px">SKU / Summary</th>
+            ${pg.skuRows.map(s => `<th colspan="5" style="background:#2d3f6e">${esc(s.size)}</th>`).join('')}
+          </tr>
+          <tr>
+            ${pg.skuRows.flatMap(() => cols.map(c => `<th class="wh-metric-col">${c}</th>`)).join('')}
+          </tr>
+        </thead>
+        <tbody>`;
+
+    // Parent row (Ann Arbor WH summary is first)
+    stores.forEach((store, si) => {
+      const sd = pg.storesData[si];
+      const rowCls = store.isWH ? 'group-header' : '';
+      html += `<tr class="${rowCls}">
+        <td class="left">${esc(store.name)}${store.isWH ? ' <span class="badge badge-blue">WH</span>' : ''}</td>
+        <td class="left text-muted">Summary</td>
+        ${pg.skuRows.map((sku, ki) => {
+          const sd2 = sku.storesData[si];
+          return `<td class="num">${fmtNum(sd2.onHand)}</td><td class="num">${fmtNum(sd2.inTransit)}</td><td class="num">${fmtNum(sd2.threshold)}</td><td class="num">${fmtNum(sd2.optimalStock)}</td><td class="num">${fmtNum(sd2.sales)}</td>`;
+        }).join('')}
+      </tr>`;
+    });
+
+    html += '</tbody></table></div></div>';
+  });
+
+  document.getElementById('sku-content').innerHTML = html;
+}
+
+// ==================== GROUP SEARCH ====================
+function loadGroupSearch() {
+  const type    = document.getElementById('grp-type').value;
+  const parents = getSelectedParents();
+  if (!parents.length) { toast('Please select at least one parent name.'); return; }
+  document.getElementById('grp-content').innerHTML = '<div class="spinner-wrap"><div class="spinner"></div> Loading…</div>';
+  google.script.run
+    .withSuccessHandler(renderGroupSearch)
+    .withFailureHandler(err => { document.getElementById('grp-content').innerHTML = '<div style="color:red;padding:20px">Error: ' + err.message + '</div>'; })
+    .getGroupSearchData(type, parents, currentGrpPeriod);
+}
+
+function renderGroupSearch(data) {
+  const { stores, parents, totals, salesPeriod } = data;
+  if (!parents || !parents.length) { document.getElementById('grp-content').innerHTML = '<div class="spinner-wrap">No data.</div>'; return; }
+  const cols = ['On Hand', 'Intransit', 'Threshold', 'Opt. Stock', (salesPeriod || 'L30') + ' Sales'];
+
+  // Build one table: rows = stores, cols = parent × metric
+  let html = `<div class="card">
+    <div class="card-header">Group Summary <span>${parents.length} parent(s) selected · ${(salesPeriod || 'L30')} Sales</span></div>
+    <div class="tbl-wrap"><table>
+      <thead>
+        <tr>
+          <th class="left" rowspan="2" style="min-width:160px">Store</th>
+          ${parents.map(p => `<th colspan="5" style="background:#2d3f6e;white-space:normal;max-width:180px;font-size:11px">${esc(p.parentName)}</th>`).join('')}
+          <th colspan="5" style="background:#12203a">TOTAL</th>
+        </tr>
+        <tr>
+          ${parents.flatMap(() => cols.map(c => `<th class="wh-metric-col">${c}</th>`)).join('')}
+          ${cols.map(c => `<th class="wh-metric-col">${c}</th>`).join('')}
+        </tr>
+      </thead>
+      <tbody>`;
+
+  stores.forEach((store, si) => {
+    const rowCls = store.isWH ? 'group-header' : '';
+    const totalSd = totals[si];
+    html += `<tr class="${rowCls}">
+      <td class="left">${esc(store.name)}${store.isWH ? ' <span class="badge badge-blue">WH</span>' : ''}</td>
+      ${parents.map(p => {
+        const sd = p.storesData[si];
+        return `<td class="num">${fmtNum(sd.onHand)}</td><td class="num">${fmtNum(sd.inTransit)}</td><td class="num">${fmtNum(sd.threshold)}</td><td class="num">${fmtNum(sd.optimalStock)}</td><td class="num">${fmtNum(sd.sales)}</td>`;
+      }).join('')}
+      <td class="num" style="font-weight:700">${fmtNum(totalSd.onHand)}</td>
+      <td class="num" style="font-weight:700">${fmtNum(totalSd.inTransit)}</td>
+      <td class="num" style="font-weight:700">${fmtNum(totalSd.threshold)}</td>
+      <td class="num" style="font-weight:700">${fmtNum(totalSd.optimalStock)}</td>
+      <td class="num" style="font-weight:700">${fmtNum(totalSd.sales)}</td>
+    </tr>`;
+  });
+
+  // Grand total row
+  const grandTotals = { onHand: 0, inTransit: 0, threshold: 0, optimalStock: 0, sales: 0 };
+  totals.forEach(t => { Object.keys(grandTotals).forEach(k => grandTotals[k] += t[k] || 0); });
+  const parentGrandTotals = parents.map(p => {
+    const gt = { onHand: 0, inTransit: 0, threshold: 0, optimalStock: 0, sales: 0 };
+    p.storesData.forEach(sd => Object.keys(gt).forEach(k => gt[k] += sd[k] || 0));
+    return gt;
+  });
+
+  html += `<tr style="background:#1a2744;color:#fff;font-weight:700">
+    <td class="left">TOTAL</td>
+    ${parentGrandTotals.map(gt =>
+      `<td class="num">${fmtNum(gt.onHand)}</td><td class="num">${fmtNum(gt.inTransit)}</td><td class="num">${fmtNum(gt.threshold)}</td><td class="num">${fmtNum(gt.optimalStock)}</td><td class="num">${fmtNum(gt.sales)}</td>`
+    ).join('')}
+    <td class="num">${fmtNum(grandTotals.onHand)}</td>
+    <td class="num">${fmtNum(grandTotals.inTransit)}</td>
+    <td class="num">${fmtNum(grandTotals.threshold)}</td>
+    <td class="num">${fmtNum(grandTotals.optimalStock)}</td>
+    <td class="num">${fmtNum(grandTotals.sales)}</td>
+  </tr>`;
+
+  html += '</tbody></table></div></div>';
+  document.getElementById('grp-content').innerHTML = html;
+}
+
+// ==================== GITHUB PUSH ====================
+function pushToGitHub() {
+  toast('Pushing to GitHub…');
+  google.script.run
+    .withSuccessHandler(r => toast(r.success ? r.message : '❌ ' + r.error, !r.success))
+    .withFailureHandler(err => toast('Error: ' + err.message, true))
+    .pushToGitHub();
+}
+
+// ==================== HELPERS ====================
+function fmtNum(v) {
+  if (v == null || v === '' || isNaN(v)) return '—';
+  const n = Number(v);
+  return n === 0 ? '<span class="text-muted">0</span>' : n.toLocaleString();
+}
+function esc(s) {
+  if (s == null) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function toast(msg, isErr) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.style.background = isErr ? '#b91c1c' : '#1e2533';
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 4000);
+}
+</script>
+</body>
+</html>
