@@ -1,0 +1,694 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>S&L Inventory Dashboard</title>
+<style>
+/* ── CONFIG ─────────────────────────────────────────────────────── */
+/* Change DATA_URL in the script below to point to your data.json   */
+
+:root{--bg:#f4f6fb;--white:#fff;--border:#dde1ea;--navy:#1a2744;--navy2:#243360;--accent:#3558b0;--red:#c0392b;--green:#2e7d32;--amber:#b45309;--text:#1e2533;--muted:#6b7280;--flag:#fff8e1;--flag-b:#ffc107;}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Segoe UI',Arial,sans-serif;background:var(--bg);color:var(--text);font-size:12px;}
+/* Loading */
+#loading{position:fixed;inset:0;background:var(--navy);display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fff;z-index:999;gap:16px;}
+#loading h2{font-size:22px;font-weight:700;}
+.ld-bar{width:280px;height:6px;background:rgba(255,255,255,.2);border-radius:3px;overflow:hidden;}
+.ld-fill{height:100%;background:#60a5fa;border-radius:3px;animation:ldp 1.4s ease-in-out infinite;}
+@keyframes ldp{0%,100%{width:15%;margin-left:0}50%{width:60%;margin-left:20%}}
+#load-msg{font-size:13px;opacity:.65;}
+#load-err{color:#f87171;font-size:13px;max-width:400px;text-align:center;display:none;}
+/* App */
+#app{display:none;}
+header{background:var(--navy);color:#fff;padding:10px 18px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;}
+.h-title{font-size:15px;font-weight:700;}
+.h-sub{font-size:10px;opacity:.6;margin-top:2px;}
+.h-right{display:flex;gap:8px;align-items:center;flex-shrink:0;}
+.h-badge{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);border-radius:4px;padding:4px 10px;font-size:10px;color:rgba(255,255,255,.8);}
+.h-badge.ok{background:rgba(46,125,50,.3);border-color:rgba(46,125,50,.5);color:#a5d6a7;}
+.h-badge.old{background:rgba(192,57,43,.3);border-color:rgba(192,57,43,.5);color:#ef9a9a;}
+#refresh-btn{background:#fff;color:var(--navy);border:none;border-radius:4px;padding:5px 11px;cursor:pointer;font-size:11px;font-weight:600;}
+#refresh-btn:hover{background:#e8edf7;}
+/* Nav */
+nav{background:var(--navy2);display:flex;overflow-x:auto;}
+nav button{background:none;border:none;color:rgba(255,255,255,.6);padding:9px 18px;cursor:pointer;font-size:12px;font-weight:500;border-bottom:3px solid transparent;white-space:nowrap;transition:all .15s;}
+nav button:hover{color:#fff;}
+nav button.active{color:#fff;border-bottom-color:#60a5fa;background:rgba(255,255,255,.07);}
+/* Tabs */
+.tab{display:none;padding:14px;}
+.tab.active{display:block;}
+/* Controls */
+.ctrl{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:12px;align-items:flex-end;}
+.ctrl-g label{font-size:10px;font-weight:700;color:var(--muted);display:block;margin-bottom:3px;text-transform:uppercase;letter-spacing:.4px;}
+select{border:1px solid var(--border);border-radius:4px;background:#fff;color:var(--text);padding:5px 8px;font-size:12px;cursor:pointer;min-width:160px;}
+.pills{display:flex;gap:3px;}
+.pill{border:1px solid var(--border);border-radius:20px;background:#fff;color:var(--text);padding:4px 12px;font-size:11px;cursor:pointer;}
+.pill.on{background:var(--accent);color:#fff;border-color:var(--accent);}
+/* Multi-select */
+.ms-wrap{position:relative;}
+.ms-btn{border:1px solid var(--border);border-radius:4px;background:#fff;padding:5px 8px;cursor:pointer;font-size:12px;min-width:200px;display:flex;justify-content:space-between;align-items:center;gap:6px;}
+.ms-btn::after{content:'▾';color:var(--muted);font-size:10px;}
+.ms-dd{display:none;position:absolute;top:calc(100% + 2px);left:0;background:#fff;border:1px solid var(--border);border-radius:4px;z-index:50;min-width:260px;max-height:260px;overflow-y:auto;box-shadow:0 4px 14px rgba(0,0,0,.12);}
+.ms-dd.open{display:block;}
+.ms-dd label{display:flex;align-items:center;gap:8px;padding:6px 12px;cursor:pointer;font-size:12px;}
+.ms-dd label:hover{background:#f0f4ff;}
+.ms-all{border-bottom:1px solid var(--border);font-weight:700;}
+/* Card */
+.card{background:#fff;border-radius:6px;border:1px solid var(--border);margin-bottom:14px;overflow:hidden;}
+.card-hdr{background:var(--navy);color:#fff;padding:7px 12px;font-weight:700;font-size:12px;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;}
+.card-hdr .tags{display:flex;gap:5px;align-items:center;}
+.tag{font-size:10px;font-weight:400;background:rgba(255,255,255,.15);padding:1px 8px;border-radius:10px;}
+.tag-auto{background:rgba(96,165,250,.3);font-size:10px;font-weight:500;padding:1px 8px;border-radius:10px;}
+/* Table */
+.tw{overflow-x:auto;max-height:440px;overflow-y:auto;}
+table{border-collapse:collapse;width:100%;min-width:400px;}
+th{background:#1a2744;color:#fff;padding:5px 7px;text-align:center;font-size:10px;font-weight:600;white-space:nowrap;position:sticky;top:0;z-index:2;border-right:1px solid rgba(255,255,255,.1);}
+th.L{text-align:left;}
+td{padding:4px 7px;border-bottom:1px solid #f0f1f5;border-right:1px solid #f4f5f8;text-align:center;white-space:nowrap;font-size:11px;}
+td.L{text-align:left;max-width:240px;overflow:hidden;text-overflow:ellipsis;}
+tr:hover td{background:#f5f7ff;}
+tr.g-row td{background:#e8edf7;font-weight:700;color:var(--navy);}
+tr.f-row td{background:var(--flag);}
+tr.f-row td.L{border-left:3px solid var(--flag-b);}
+tr.t-row td{background:#e0e7ff;font-weight:700;}
+/* Badges */
+.badge{display:inline-block;border-radius:3px;padding:1px 6px;font-size:10px;font-weight:700;}
+.b-red{background:#fde8e8;color:var(--red);}
+.b-green{background:#e8f5e9;color:var(--green);}
+.b-amber{background:#fef3c7;color:var(--amber);}
+.b-blue{background:#e3eeff;color:var(--accent);}
+.b-grey{background:#f3f4f6;color:var(--muted);}
+/* Misc */
+.num{font-variant-numeric:tabular-nums;}
+.muted{color:var(--muted);}
+.sm{font-size:10px;}
+.info{background:#e8edf7;border-radius:6px;padding:9px 13px;margin-bottom:12px;font-size:11px;color:var(--navy2);line-height:1.6;}
+/* Toast */
+#toast{position:fixed;bottom:20px;right:20px;background:#1e2533;color:#fff;padding:10px 16px;border-radius:6px;font-size:12px;z-index:999;transform:translateY(60px);opacity:0;transition:all .3s;max-width:380px;}
+#toast.show{transform:translateY(0);opacity:1;}
+</style>
+</head>
+<body>
+
+<!-- ── LOADING SCREEN ─────────────────────────── -->
+<div id="loading">
+  <h2>📦 S&L Inventory Dashboard</h2>
+  <div class="ld-bar"><div class="ld-fill"></div></div>
+  <div id="load-msg">Fetching latest data…</div>
+  <div id="load-err"></div>
+</div>
+
+<!-- ── APP ───────────────────────────────────── -->
+<div id="app">
+  <header>
+    <div>
+      <div class="h-title">📦 State &amp; Liberty — Inventory Dashboard</div>
+      <div class="h-sub" id="hdate">—</div>
+    </div>
+    <div class="h-right">
+      <span class="h-badge" id="data-age">—</span>
+      <button id="refresh-btn" onclick="reloadData()">🔄 Refresh</button>
+    </div>
+  </header>
+
+  <nav>
+    <button class="active" onclick="switchTab('whse',this)">🏭 WH Stock Overview</button>
+    <button onclick="switchTab('zero',this)">⚠ Weekly Zero Threshold</button>
+    <button onclick="switchTab('sku',this)">🔍 SKU Search</button>
+    <button onclick="switchTab('group',this)">📦 Search by Group</button>
+  </nav>
+
+  <!-- TAB 1: WH STOCK OVERVIEW -->
+  <div id="tab-whse" class="tab active">
+    <div class="ctrl">
+      <div class="ctrl-g">
+        <label>Sales Period</label>
+        <div class="pills" id="wp">
+          <button class="pill on" data-p="L30">L30</button>
+          <button class="pill" data-p="L45">L45</button>
+          <button class="pill" data-p="L60">L60</button>
+          <button class="pill" data-p="L90">L90</button>
+        </div>
+      </div>
+    </div>
+    <div class="info">
+      <strong>Staple items</strong> are always shown at top. &nbsp;|&nbsp;
+      <strong>Auto section</strong>: other items with Total OH ≥ 200 or PO On Order, grouped by Product Type.
+    </div>
+    <div id="whse-body"></div>
+  </div>
+
+  <!-- TAB 2: WEEKLY ZERO THRESHOLD -->
+  <div id="tab-zero" class="tab">
+    <div class="info">
+      Shows parent names where any SKU has <strong>WH Inv &lt; 5</strong>, <strong>no PO</strong>, and <strong>Threshold &gt; 0</strong>.
+      All sibling SKUs are shown. <span class="badge b-red">⚠ LOW</span> = flagged SKU.
+    </div>
+    <div id="zero-body"></div>
+  </div>
+
+  <!-- TAB 3: SKU SEARCH -->
+  <div id="tab-sku" class="tab">
+    <div class="ctrl">
+      <div class="ctrl-g">
+        <label>Product Type</label>
+        <select id="sku-type" onchange="onSkuType()"><option value="">— All —</option></select>
+      </div>
+      <div class="ctrl-g">
+        <label>Parent Name</label>
+        <select id="sku-parent" onchange="renderSkuSearch()"><option value="">— Select —</option></select>
+      </div>
+      <div class="ctrl-g">
+        <label>Sales Period</label>
+        <div class="pills" id="sp">
+          <button class="pill on" data-p="L30">L30</button>
+          <button class="pill" data-p="L45">L45</button>
+          <button class="pill" data-p="L60">L60</button>
+          <button class="pill" data-p="L90">L90</button>
+        </div>
+      </div>
+    </div>
+    <div id="sku-body"></div>
+  </div>
+
+  <!-- TAB 4: SEARCH BY GROUP -->
+  <div id="tab-group" class="tab">
+    <div class="ctrl">
+      <div class="ctrl-g">
+        <label>Product Type</label>
+        <select id="grp-type" onchange="onGrpType()"><option value="">— All —</option></select>
+      </div>
+      <div class="ctrl-g">
+        <label>Parent Name(s)</label>
+        <div class="ms-wrap">
+          <button class="ms-btn" id="ms-btn" onclick="toggleMs(event)">Select parents</button>
+          <div class="ms-dd" id="ms-dd"></div>
+        </div>
+      </div>
+      <div class="ctrl-g">
+        <label>Sales Period</label>
+        <div class="pills" id="gp">
+          <button class="pill on" data-p="L30">L30</button>
+          <button class="pill" data-p="L45">L45</button>
+          <button class="pill" data-p="L60">L60</button>
+          <button class="pill" data-p="L90">L90</button>
+        </div>
+      </div>
+      <div class="ctrl-g" style="margin-top:18px;">
+        <button onclick="renderGroupSearch()" style="background:var(--accent);color:#fff;border:none;border-radius:4px;padding:6px 16px;cursor:pointer;font-size:12px;font-weight:600;">Search</button>
+      </div>
+    </div>
+    <div id="grp-body"></div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ============================================================
+// ⚙️  CONFIGURE THIS — point to your data.json on GitHub
+// ============================================================
+// If GitHub Pages is enabled, use relative path:
+const DATA_URL = './data.json';
+// Otherwise use the raw GitHub URL:
+// const DATA_URL = 'https://raw.githubusercontent.com/YOUR_USER/YOUR_REPO/main/data.json';
+// ============================================================
+
+let D = null;
+let wP = 'L30', sP = 'L30', gP = 'L30';
+
+// ── INIT ─────────────────────────────────────────────────────
+async function loadData() {
+  try {
+    document.getElementById('load-msg').textContent = 'Fetching data.json from GitHub…';
+    const res = await fetch(DATA_URL + '?t=' + Date.now()); // cache-bust
+    if (!res.ok) throw new Error(`HTTP ${res.status} — ${res.statusText}`);
+    document.getElementById('load-msg').textContent = 'Parsing data…';
+    D = await res.json();
+    init();
+  } catch(e) {
+    const el = document.getElementById('load-err');
+    el.style.display = 'block';
+    el.textContent = 'Failed to load data: ' + e.message + '\nMake sure data.json exists in your GitHub repo and GitHub Pages is enabled.';
+    document.getElementById('load-msg').textContent = '';
+  }
+}
+
+function reloadData() {
+  document.getElementById('loading').style.display = 'flex';
+  document.getElementById('app').style.display = 'none';
+  D = null;
+  loadData();
+}
+
+function init() {
+  // Header dates
+  document.getElementById('hdate').textContent = 'INV Updated: ' + (D.dateUpdated || '—');
+  setDataAge(D.generatedAt);
+
+  // Populate dropdowns
+  ['sku-type','grp-type'].forEach(id => {
+    const sel = document.getElementById(id);
+    sel.innerHTML = '<option value="">— All —</option>';
+    D.productTypes.forEach(t => sel.insertAdjacentHTML('beforeend', `<option value="${x(t)}">${x(t)}</option>`));
+  });
+
+  // Pill listeners
+  pill('wp', v => { wP = v; renderWhse(); });
+  pill('sp', v => { sP = v; renderSkuSearch(); });
+  pill('gp', v => { gP = v; });
+
+  // Outside click closes multiselect
+  document.addEventListener('click', e => {
+    if (!document.getElementById('ms-dd').closest('.ms-wrap').contains(e.target)) closeMs();
+  });
+
+  // Render default tabs
+  renderWhse();
+  renderZero();
+
+  // Show app
+  document.getElementById('loading').style.display = 'none';
+  document.getElementById('app').style.display = 'block';
+}
+
+function setDataAge(iso) {
+  const el = document.getElementById('data-age');
+  if (!iso) return;
+  const mins = Math.round((Date.now() - new Date(iso)) / 60000);
+  const text = mins < 60 ? `Data: ${mins}m ago` : mins < 1440 ? `Data: ${Math.round(mins/60)}h ago` : `Data: ${Math.round(mins/1440)}d ago`;
+  el.textContent = text;
+  el.className = 'h-badge ' + (mins < 1440 ? 'ok' : 'old');
+}
+
+// ── TABS ─────────────────────────────────────────────────────
+function switchTab(id, btn) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-' + id).classList.add('active');
+  btn.classList.add('active');
+}
+
+// ── PILLS ────────────────────────────────────────────────────
+function pill(id, cb) {
+  document.getElementById(id).querySelectorAll('.pill').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.getElementById(id).querySelectorAll('.pill').forEach(b => b.classList.remove('on'));
+      btn.classList.add('on');
+      cb(btn.dataset.p);
+    });
+  });
+}
+
+// ── DROPDOWNS ────────────────────────────────────────────────
+function onSkuType() {
+  const type = document.getElementById('sku-type').value;
+  const sel  = document.getElementById('sku-parent');
+  sel.innerHTML = '<option value="">— Select —</option>';
+  D.allParentNames
+    .filter(pn => !type || D.parentMap[pn]?.productType === type)
+    .sort()
+    .forEach(pn => sel.insertAdjacentHTML('beforeend', `<option value="${x(pn)}">${x(pn)}</option>`));
+  document.getElementById('sku-body').innerHTML = '';
+}
+
+function onGrpType() {
+  const type = document.getElementById('grp-type').value;
+  const names = D.allParentNames
+    .filter(pn => !type || D.parentMap[pn]?.productType === type)
+    .sort();
+  buildMs(names);
+  document.getElementById('grp-body').innerHTML = '';
+}
+
+// ── MULTISELECT ──────────────────────────────────────────────
+function toggleMs(e) { e.stopPropagation(); document.getElementById('ms-dd').classList.toggle('open'); }
+function closeMs()   { document.getElementById('ms-dd').classList.remove('open'); }
+function buildMs(names) {
+  const dd = document.getElementById('ms-dd');
+  dd.innerHTML = `<label class="ms-all"><input type="checkbox" id="ms-all" onchange="msAll(this)"> Select All</label>`;
+  names.forEach(n => dd.insertAdjacentHTML('beforeend',
+    `<label><input type="checkbox" class="ms-cb" value="${x(n)}" onchange="msLabel()"> ${x(n)}</label>`));
+  msLabel();
+}
+function msAll(el)  { document.querySelectorAll('.ms-cb').forEach(c => c.checked = el.checked); msLabel(); }
+function msLabel()  {
+  const cbs = [...document.querySelectorAll('.ms-cb')];
+  const sel = cbs.filter(c => c.checked);
+  document.getElementById('ms-btn').childNodes[0].textContent =
+    sel.length === 0 ? 'Select parents ' : sel.length === cbs.length ? `All (${cbs.length}) ` : `${sel.length} selected `;
+  const all = document.getElementById('ms-all');
+  if (all) all.checked = sel.length === cbs.length && cbs.length > 0;
+}
+function selParents() { return [...document.querySelectorAll('.ms-cb:checked')].map(c => c.value); }
+
+// ── TAB 1: WH STOCK OVERVIEW ─────────────────────────────────
+function renderWhse() {
+  if (!D) return;
+  const period = wP;
+  const days   = {L30:30,L45:45,L60:60,L90:90}[period];
+  const sales  = D.salesData[period];
+
+  // Staple groups (hardcoded order, hide if not in data)
+  const stapleGroups = D.stapleStructure
+    .map(g => ({ ...g, items: g.items.filter(pn => D.parentMap[pn]), isAuto: false }))
+    .filter(g => g.items.length > 0);
+
+  // Auto groups: not in staple, Total OH >= 200 OR has PO
+  const stapleSet = new Set(D.stapleStructure.flatMap(g => g.items));
+  const autoByType = {};
+  D.allParentNames.forEach(pn => {
+    if (stapleSet.has(pn) || !D.parentMap[pn]) return;
+    const { totalOH, hasPO } = getOH(pn);
+    if (totalOH < 200 && !hasPO) return;
+    const pt = D.parentMap[pn].productType || 'Other';
+    if (!autoByType[pt]) autoByType[pt] = [];
+    autoByType[pt].push({ pn, totalOH });
+  });
+  const autoGroups = Object.entries(autoByType)
+    .sort((a,b) => a[0].localeCompare(b[0]))
+    .map(([pt, items]) => ({
+      group: pt,
+      items: items.sort((a,b) => b.totalOH - a.totalOH).map(i => i.pn),
+      isAuto: true
+    }));
+
+  let html = '';
+  [...stapleGroups, ...autoGroups].forEach(g => {
+    html += whseGroupHtml(g.group, g.items, g.isAuto, period, days, sales);
+  });
+
+  document.getElementById('whse-body').innerHTML = html || '<div style="padding:20px;color:var(--muted)">No data.</div>';
+}
+
+function getOH(pn) {
+  const pm = D.parentMap[pn];
+  if (!pm) return { totalOH: 0, hasPO: false };
+  let totalOH = 0, hasPO = false;
+  pm.skus.forEach(sku => {
+    if (D.invData[sku]) Object.values(D.invData[sku]).forEach(s => { totalOH += (s.onHand||0)+(s.inTransit||0); });
+    if (D.poData[sku]?.totalQty > 0) hasPO = true;
+  });
+  return { totalOH, hasPO };
+}
+
+function whseGroupHtml(grpName, pns, isAuto, period, days, sales) {
+  // Collect sizes
+  const sizeSet = new Set();
+  pns.forEach(pn => (D.parentMap[pn]?.sizeOrder||[]).forEach(s => sizeSet.add(s)));
+  const sizes = sortSizes([...sizeSet]);
+
+  const autoTag = isAuto
+    ? `<span class="tag-auto">Auto · OH≥200 or PO</span>`
+    : `<span class="tag">Staple</span>`;
+
+  let html = `<div class="card">
+    <div class="card-hdr">
+      <span>${x(grpName)}</span>
+      <div class="tags">${autoTag}<span class="tag">${pns.length} item(s)</span></div>
+    </div>
+    <div class="tw"><table>
+    <thead><tr>
+      <th class="L" style="min-width:210px">Product</th>
+      ${sizes.map(s=>`<th>${x(s)}</th>`).join('')}
+      <th>Grand Total</th><th>WH DI</th><th>Stock Out</th>
+      <th>Earliest PO ETA</th><th>Earliest PO</th>
+      <th>Total OH</th><th>${x(period)}</th>
+      <th>Threshold</th><th>Intransit</th>
+      <th>PO On Order</th>
+      <th style="min-width:180px">Upcoming POs</th>
+    </tr></thead><tbody>`;
+
+  pns.forEach(pn => {
+    const pm = D.parentMap[pn];
+    if (!pm) return;
+    const sizeInv = {};
+    let grand=0, poTotal=0, whIT=0, thresh=0, totalOH=0;
+    let epDate=null, epPO='';
+    const upPOs = new Set();
+
+    pm.skus.forEach(sku => {
+      const item = D.skuMap[sku];
+      if (!item) return;
+      const whInv = D.invData[sku]?.['Ann Arbor'];
+      const oh    = whInv ? whInv.onHand : (item.whseInv||0);
+      const it    = whInv ? whInv.inTransit : 0;
+      sizeInv[item.size] = (sizeInv[item.size]||0) + oh;
+      grand   += oh;
+      whIT    += it;
+      poTotal += item.poOnOrder||0;
+      thresh  += D.thresholdData[sku]?._total||0;
+      if (D.invData[sku]) Object.values(D.invData[sku]).forEach(s => { totalOH+=(s.onHand||0)+(s.inTransit||0); });
+      if (D.poData[sku]) {
+        D.poData[sku].pos.forEach(p => {
+          if (p.po) upPOs.add(p.po);
+          if (p.eta) { const d=new Date(p.eta); if(!isNaN(d)&&(!epDate||d<epDate)){epDate=d;epPO=p.po;} }
+        });
+      }
+    });
+
+    const salesQty  = sales.byParent[pn]||0;
+    const daily     = salesQty/days;
+    const whDI      = daily>0 ? grand/daily : null;
+    let stockOut = '';
+    if (whDI && D.dateUpdated) {
+      try { const d=new Date(D.dateUpdated); d.setDate(d.getDate()+Math.round(whDI)); stockOut=fd(d); } catch(e){}
+    }
+    const diCls  = whDI==null?'b-grey':whDI<14?'b-red':whDI<30?'b-amber':'b-green';
+    const diTxt  = whDI!=null ? whDI.toFixed(1) : '—';
+
+    html += `<tr>
+      <td class="L" title="${x(pn)}">${x(pn)}</td>
+      ${sizes.map(s=>`<td class="num">${nn(sizeInv[s])}</td>`).join('')}
+      <td class="num"><strong>${nn(grand)}</strong></td>
+      <td><span class="badge ${diCls}">${diTxt}</span></td>
+      <td class="sm">${stockOut||'—'}</td>
+      <td class="sm">${epDate?fd(epDate):'—'}</td>
+      <td class="sm muted">${x(epPO)||'—'}</td>
+      <td class="num">${nn(totalOH)}</td>
+      <td class="num">${nn(salesQty)}</td>
+      <td class="num">${nn(thresh)}</td>
+      <td class="num">${nn(whIT)}</td>
+      <td class="num">${nn(poTotal)}</td>
+      <td class="sm muted" style="white-space:normal;max-width:200px">${x([...upPOs].join(', '))||'—'}</td>
+    </tr>`;
+  });
+
+  return html + '</tbody></table></div></div>';
+}
+
+// ── TAB 2: ZERO THRESHOLD ─────────────────────────────────────
+function renderZero() {
+  if (!D) return;
+  const flagSkus = new Set(), flagParents = new Set();
+  D.allParentNames.forEach(pn => {
+    (D.parentMap[pn]?.skus||[]).forEach(sku => {
+      const item  = D.skuMap[sku];
+      if (!item) return;
+      const thr   = D.thresholdData[sku]?._total||0;
+      const hasPO = D.poData[sku]?.totalQty > 0;
+      if (thr>0 && item.whseInv<5 && !hasPO) { flagSkus.add(sku); flagParents.add(pn); }
+    });
+  });
+
+  if (!flagParents.size) {
+    document.getElementById('zero-body').innerHTML = '<div style="padding:24px;text-align:center;color:var(--green);font-weight:700;font-size:14px">✅ No flagged SKUs — all good!</div>';
+    return;
+  }
+
+  let html = '';
+  [...flagParents]
+    .sort((a,b)=>(D.parentMap[a]?.productType||'').localeCompare(D.parentMap[b]?.productType||'')||a.localeCompare(b))
+    .forEach(pn => {
+      const pm = D.parentMap[pn];
+      html += `<div class="card">
+        <div class="card-hdr">${x(pn)} <span class="tag">${x(pm?.productType)}</span></div>
+        <div class="tw"><table>
+        <thead><tr>
+          <th class="L">Flag</th><th class="L" style="min-width:170px">SKU</th>
+          <th class="L">Product Name</th><th>Size</th>
+          <th>WH Inv</th><th>Threshold</th><th>PO On Order</th>
+          <th>Store Inv</th><th>Total OH</th>
+        </tr></thead><tbody>`;
+
+      pm.skus.forEach(sku => {
+        const item = D.skuMap[sku];
+        if (!item) return;
+        const thr   = D.thresholdData[sku]?._total||0;
+        const poQty = D.poData[sku]?.totalQty||0;
+        let storeInv = 0;
+        if (D.invData[sku]) Object.entries(D.invData[sku]).forEach(([st,s])=>{ if(st!=='Ann Arbor') storeInv+=(s.onHand||0)+(s.inTransit||0); });
+        const totOH  = item.whseInv + storeInv;
+        const flag   = flagSkus.has(sku);
+        html += `<tr class="${flag?'f-row':''}">
+          <td class="L">${flag?'<span class="badge b-red">⚠ LOW</span>':''}</td>
+          <td class="L muted sm">${x(sku)}</td>
+          <td class="L">${x(item.productName)}</td>
+          <td>${x(item.size)}</td>
+          <td class="num" style="${flag?'color:var(--red);font-weight:700':''}">${nn(item.whseInv)}</td>
+          <td class="num">${nn(thr)}</td>
+          <td class="num">${nn(poQty)}</td>
+          <td class="num">${nn(storeInv)}</td>
+          <td class="num">${nn(totOH)}</td>
+        </tr>`;
+      });
+      html += '</tbody></table></div></div>';
+    });
+
+  document.getElementById('zero-body').innerHTML = html;
+}
+
+// ── TAB 3: SKU SEARCH ─────────────────────────────────────────
+function renderSkuSearch() {
+  if (!D) return;
+  const pn   = document.getElementById('sku-parent').value;
+  if (!pn) { document.getElementById('sku-body').innerHTML = ''; return; }
+  const pm   = D.parentMap[pn];
+  if (!pm)   return;
+  const period = sP;
+  const sales  = D.salesData[period];
+  const stores = D.stores;
+  const cols   = ['On Hand','Intransit','Threshold','Opt Stock',period+' Sales'];
+
+  const parentAgg = stores.map(st => agg(pm.skus, st, sales));
+  const skuRows   = pm.skus.map(sku => ({
+    sku, size: D.skuMap[sku]?.size||'', name: D.skuMap[sku]?.productName||'',
+    storeAgg: stores.map(st => agg([sku], st, sales))
+  }));
+
+  let html = `<div class="card">
+    <div class="card-hdr">${x(pn)} <span class="tag">${x(pm.productType)}</span></div>
+    <div class="tw"><table>
+    <thead>
+      <tr>
+        <th class="L" rowspan="2" style="min-width:140px">Store</th>
+        <th colspan="5">All SKUs Combined</th>
+        ${skuRows.map(s=>`<th colspan="5" style="background:#2d3f6e;font-size:10px">${x(s.size||s.sku)}</th>`).join('')}
+      </tr>
+      <tr>${[...cols,...skuRows.flatMap(()=>cols)].map(c=>`<th>${c}</th>`).join('')}</tr>
+    </thead><tbody>`;
+
+  stores.forEach((st, si) => {
+    const sd  = parentAgg[si];
+    const cls = st.isWH ? 'g-row' : '';
+    const wh  = st.isWH ? ' <span class="badge b-blue">WH</span>' : '';
+    html += `<tr class="${cls}">
+      <td class="L">${x(st.name)}${wh}</td>
+      ${row5(sd)}
+      ${skuRows.map(sr=>row5(sr.storeAgg[si])).join('')}
+    </tr>`;
+  });
+
+  html += '</tbody></table></div></div>';
+  document.getElementById('sku-body').innerHTML = html;
+}
+
+function row5(d) {
+  return `<td class="num">${nn(d.onHand)}</td><td class="num">${nn(d.inTransit)}</td><td class="num">${nn(d.threshold)}</td><td class="num">${nn(d.optStock)}</td><td class="num">${nn(d.sales)}</td>`;
+}
+
+function agg(skus, store, sales) {
+  let oh=0,it=0,thr=0,opt=0,s=0;
+  skus.forEach(sku => {
+    const inv = D.invData[sku]?.[store.name]||{onHand:0,inTransit:0};
+    oh  += inv.onHand;
+    it  += inv.inTransit;
+    thr += store.isWH ? (D.thresholdData[sku]?._total||0) : (D.thresholdData[sku]?.[store.thresholdName]||0);
+    opt += D.optStockData[sku]?.[store.name]||0;
+    s   += sales.bySkuStore[sku]?.[store.posName]||0;
+  });
+  return { onHand:oh, inTransit:it, threshold:thr, optStock:opt, sales:s };
+}
+
+// ── TAB 4: GROUP SEARCH ───────────────────────────────────────
+function renderGroupSearch() {
+  if (!D) return;
+  const parents = selParents();
+  if (!parents.length) { toast('Select at least one parent name.'); return; }
+  const period = gP, sales = D.salesData[period], stores = D.stores;
+  const cols   = ['On Hand','Intransit','Threshold','Opt Stock',period+' Sales'];
+
+  const pData = parents.map(pn => ({
+    pn, pt: D.parentMap[pn]?.productType||'',
+    storeAgg: stores.map(st => agg(D.parentMap[pn]?.skus||[], st, sales))
+  }));
+
+  const storeTotals = stores.map((_,si) => {
+    const t={onHand:0,inTransit:0,threshold:0,optStock:0,sales:0};
+    pData.forEach(pd=>{ const sd=pd.storeAgg[si]; Object.keys(t).forEach(k=>t[k]+=sd[k]); });
+    return t;
+  });
+  const parentTotals = pData.map(pd => {
+    const t={onHand:0,inTransit:0,threshold:0,optStock:0,sales:0};
+    pd.storeAgg.forEach(sd=>Object.keys(t).forEach(k=>t[k]+=sd[k]));
+    return t;
+  });
+  const gg={onHand:0,inTransit:0,threshold:0,optStock:0,sales:0};
+  storeTotals.forEach(t=>Object.keys(gg).forEach(k=>gg[k]+=t[k]));
+
+  let html = `<div class="card">
+    <div class="card-hdr">Group Summary <span class="tag">${parents.length} parent(s) · ${period}</span></div>
+    <div class="tw"><table>
+    <thead>
+      <tr>
+        <th class="L" rowspan="2" style="min-width:140px">Store</th>
+        ${pData.map(pd=>`<th colspan="5" style="background:#2d3f6e;white-space:normal;max-width:150px;font-size:10px">${x(pd.pn)}</th>`).join('')}
+        <th colspan="5" style="background:#0f172a">TOTAL</th>
+      </tr>
+      <tr>${[...pData.flatMap(()=>cols),...cols].map(c=>`<th>${c}</th>`).join('')}</tr>
+    </thead><tbody>`;
+
+  stores.forEach((st, si) => {
+    const cls=st.isWH?'g-row':'', wh=st.isWH?' <span class="badge b-blue">WH</span>':'', gt=storeTotals[si];
+    html += `<tr class="${cls}">
+      <td class="L">${x(st.name)}${wh}</td>
+      ${pData.map(pd=>row5(pd.storeAgg[si])).join('')}
+      ${row5(gt)}
+    </tr>`;
+  });
+
+  // Total row
+  html += `<tr class="t-row"><td class="L">TOTAL</td>${parentTotals.map(t=>row5(t)).join('')}${row5(gg)}</tr>`;
+  html += '</tbody></table></div></div>';
+  document.getElementById('grp-body').innerHTML = html;
+}
+
+// ── HELPERS ──────────────────────────────────────────────────
+function sortSizes(arr) {
+  const O=['XS','S','M','L','XL','XXL','2XL','3XL','ONE SIZE','ONE-SIZE'];
+  return arr.sort((a,b)=>{
+    const na=parseFloat(a),nb=parseFloat(b);
+    if(!isNaN(na)&&!isNaN(nb)) return na-nb;
+    const ia=O.indexOf(a.toUpperCase()),ib=O.indexOf(b.toUpperCase());
+    if(ia>=0&&ib>=0) return ia-ib;
+    if(ia>=0) return 1; if(ib>=0) return -1;
+    return a.localeCompare(b);
+  });
+}
+function fd(d) {
+  if(!d||isNaN(d)) return '';
+  return (d.getMonth()+1).toString().padStart(2,'0')+'/'+d.getDate().toString().padStart(2,'0')+'/'+d.getFullYear();
+}
+function nn(v) {
+  if(v==null||v===''||isNaN(v)) return '<span class="muted">—</span>';
+  const n=Number(v);
+  return n===0?'<span class="muted">0</span>':n.toLocaleString();
+}
+function x(s) {
+  if(s==null) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function toast(msg, isErr) {
+  const el=document.getElementById('toast');
+  el.textContent=msg;
+  el.style.background=isErr?'#b91c1c':'#1e2533';
+  el.classList.add('show');
+  setTimeout(()=>el.classList.remove('show'),4000);
+}
+
+// ── START ─────────────────────────────────────────────────────
+loadData();
+</script>
+</body>
+</html>
